@@ -21,6 +21,8 @@ import play.api.data.Forms._
 import play.api.i18n.Messages
 import play.filters.csrf._
 import play.api.mvc.Action
+import play.api.Play
+import Play.current
 import securesocial.core._
 import securesocial.core.providers.UsernamePasswordProvider
 import securesocial.core.providers.utils.PasswordValidator
@@ -55,6 +57,11 @@ trait BasePasswordReset[U] extends MailTokenBasedOperations[U] {
   )
 
   /**
+   * the configuration property defining a possible redirection target after passwordResetStart
+   */
+  val onStartResetPasswordGoTo = "securesocial.onStartResetPasswordGoTo"
+
+  /**
    * Renders the page that starts the password reset flow
    */
   def startResetPassword = CSRFAddToken {
@@ -70,6 +77,7 @@ trait BasePasswordReset[U] extends MailTokenBasedOperations[U] {
   def handleStartResetPassword = CSRFCheck {
     Action.async {
       implicit request =>
+        val redirectTo = Redirect(Play.current.configuration.getString(onStartResetPasswordGoTo).getOrElse(env.routes.loginPageUrl))
         startForm.bindFromRequest.fold(
           errors => Future.successful(BadRequest(env.viewTemplates.getStartResetPasswordPage(errors))),
           email => env.userService.findByEmailAndProvider(email, UsernamePasswordProvider.UsernamePassword).map {
@@ -83,7 +91,7 @@ trait BasePasswordReset[U] extends MailTokenBasedOperations[U] {
                 case None =>
                   env.mailer.sendUnkownEmailNotice(email)
               }
-              handleStartResult().flashing(Success -> Messages(BaseRegistration.ThankYouCheckEmail))
+              redirectTo.flashing(Success -> Messages(BaseRegistration.ThankYouCheckEmail))
           }
         )
     }
